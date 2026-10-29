@@ -1,0 +1,105 @@
+name: Build & Release (Linux AppImage + Windows EXE)
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system & Python dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 file libxcb-cursor0 libxkbcommon-x11-0 libegl1 libdbus-1-3
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build PrismaRGB-Linux-x86_64.AppImage
+        run: |
+          chmod +x packaging/build_appimage.sh
+          ./packaging/build_appimage.sh
+          mv PrismaRGB-x86_64.AppImage PrismaRGB-Linux-x86_64.AppImage
+
+      - name: Upload Linux AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaRGB-Linux-x86_64.AppImage
+          path: PrismaRGB-Linux-x86_64.AppImage
+
+  build-windows-exe:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build PrismaRGB-Windows-x64.exe
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name PrismaRGB-Windows-x64 --add-data "backend;backend" --add-data "ui;ui" --hidden-import PySide6.QtCore --hidden-import PySide6.QtGui --hidden-import PySide6.QtWidgets --hidden-import psutil main.py
+
+      - name: Upload Windows EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismaRGB-Windows-x64.exe
+          path: dist/PrismaRGB-Windows-x64.exe
+
+  publish-release:
+    needs: [build-linux-appimage, build-windows-exe]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.0' }}
+          name: "PrismaRGB ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.0' }}"
+          body: |
+            ### PrismaRGB — RGB Lighting & Hardware Monitoring Suite
+            Repository: https://github.com/FilzDevs/PrismaRGB
+
+            #### Downloads
+            - **Linux (`x86_64` AppImage):** `PrismaRGB-Linux-x86_64.AppImage`
+              ```bash
+              chmod +x PrismaRGB-Linux-x86_64.AppImage
+              ./PrismaRGB-Linux-x86_64.AppImage
+              ```
+            - **Windows (`x64` Portable Executable):** `PrismaRGB-Windows-x64.exe`
+
+            *Platform status: Developed and tested on Linux (no known bugs). The Windows build is provided via cross-platform support and has not yet been extensively tested.*
+          files: |
+            release-assets/PrismaRGB-Linux-x86_64.AppImage
+            release-assets/PrismaRGB-Windows-x64.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

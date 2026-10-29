@@ -1,0 +1,23 @@
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Compiled native helpers & local AppImage bridges
+native/smbus_piix4_helper
+native/*.AppImage
+*.AppImage
+native/*.o
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+*~
